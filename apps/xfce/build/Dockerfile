@@ -12,7 +12,7 @@ ARG CORE_PACKAGES=" \
     firefox \
     flatpak \
     sudo \
-    "
+"
 
 ARG DE_PACKAGES=" \
     xfce4 \
@@ -21,7 +21,7 @@ ARG DE_PACKAGES=" \
     xubuntu-icon-theme \
     papirus-icon-theme arc-theme \
     at-spi2-core \
-    "
+"
 
 ARG ADDITIONAL_PACKAGES=" \
     xfce4-terminal \
@@ -32,36 +32,22 @@ ARG ADDITIONAL_PACKAGES=" \
     mousepad \
     zip unzip p7zip-full \
     gnome-software gnome-software-plugin-flatpak \
-    "
-# 
+"
+
 # Prevent firefox snap
 COPY scripts/ff-unsnap /etc/apt/preferences.d/ff-unsnap
 
 RUN \
-    # \
-    # Setup Firefox PPA \
     apt-get update && \
     apt-get install -y --no-install-recommends software-properties-common gpg-agent && \
     add-apt-repository -y ppa:mozillateam/ppa && \
     apt-get update && \
-    # \
-    # Install core packages \
     apt-get install -y $CORE_PACKAGES && \
-    # \
-    # Install de \
     apt-get install -y $DE_PACKAGES && \
-    # \
-    # Install additional apps \
     apt-get install -y --no-install-recommends $ADDITIONAL_PACKAGES && \
-    # \
-    # Fixes \
-    rm -f \
-    /etc/xdg/autostart/xscreensaver.desktop && \
-    # \
-    # Clean \
-    apt update && \
+    rm -f /etc/xdg/autostart/xscreensaver.desktop && \
     apt-get remove -y foot && \
-    apt autoremove -y &&\
+    apt autoremove -y && \
     apt clean && \
     rm -rf \
         /config/.cache \
@@ -69,25 +55,35 @@ RUN \
         /var/tmp/* \
         /tmp/*
 
-# 
-# Replace launch scripts
-COPY --chmod=777 scripts/launch-comp.sh scripts/startup.sh /opt/gow/
-COPY --chmod=777 scripts/startdbus.sh /opt/gow/startdbus
 
-#
-# Include default xfce config
-COPY --chmod=777 --chown=retro:retro scripts/xfce4 /opt/gow/xfce4
 
-# 
-# Fix locals
+# Launch scripts (executable but NOT writable)
+COPY scripts/launch-comp.sh scripts/startup.sh /opt/gow/
+RUN chown root:root /opt/gow/launch-comp.sh /opt/gow/startup.sh && \
+    chmod 755 /opt/gow/launch-comp.sh /opt/gow/startup.sh
+
+# DBus starter (ROOT ONLY)
+COPY scripts/startdbus.sh /opt/gow/startdbus
+RUN chown root:root /opt/gow/startdbus && \
+    chmod 755 /opt/gow/startdbus
+
+
+# XFCE default config
+COPY --chown=retro:retro scripts/xfce4 /opt/gow/xfce4
+RUN chmod -R 755 /opt/gow/xfce4
+
+
+# Locale
 COPY scripts/locale /etc/default/locale
 
-# 
-# Allow anyone to start dbus without password
-RUN echo "\nALL ALL=NOPASSWD: /opt/gow/startdbus" >> /etc/sudoers
 
-# 
-# Fix bwarp perms for flatpaks
+# Secure sudo 
+RUN echo "retro ALL=(root) NOPASSWD: /opt/gow/startdbus" \
+    > /etc/sudoers.d/startdbus && \
+    chmod 440 /etc/sudoers.d/startdbus
+
+
+# Flatpak bubblewrap fix
 RUN chmod u+s /usr/bin/bwrap
 
 ENV XDG_RUNTIME_DIR=/tmp/.X11-unix
